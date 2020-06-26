@@ -66,6 +66,11 @@ export const DESKTOP_METHODS = [
   ...(IS_DESKTOP_VK ? ['VKWebAppResizeWindow', 'VKWebAppAddToMenu'] : []),
 ];
 
+/** React Native VK Bridge interface. */
+const RNBridge: Record<string, (serializedData: string) => void> | undefined = IS_CLIENT_SIDE
+  ? (window as any).ReactNativeWebView
+  : undefined;
+
 /** Android VK Bridge interface. */
 const androidBridge: Record<string, (serializedData: string) => void> | undefined = IS_CLIENT_SIDE
   ? (window as any).AndroidBridge
@@ -106,6 +111,16 @@ export function createVKBridge(version: string): VKBridge {
     // Sending data through iOS bridge
     else if (iosBridge && iosBridge[method] && typeof iosBridge[method].postMessage === 'function') {
       iosBridge[method].postMessage!(props);
+    }
+
+    else if (RNBridge) {
+      RNBridge.postMessage(JSON.stringify({
+        handler: method,
+        params: props,
+        type: 'vk-connect',
+        webFrameId,
+        connectVersion: version,
+      }));
     }
 
     // Sending data through web bridge
@@ -158,7 +173,7 @@ export function createVKBridge(version: string): VKBridge {
     } else if (IS_IOS_WEBVIEW) {
       // iOS support check
       return !!(iosBridge && iosBridge[method] && typeof iosBridge[method].postMessage === 'function');
-    } else if (IS_WEB) {
+    } else if (IS_WEB || RNBridge) {
       // Web support check
       return DESKTOP_METHODS.indexOf(method) > -1;
     }
@@ -182,7 +197,7 @@ export function createVKBridge(version: string): VKBridge {
       if (IS_IOS_WEBVIEW || IS_ANDROID_WEBVIEW) {
         // If it's webview
         return [...subscribers].map((fn) => fn.call(null, event));
-      } else if (IS_WEB && event && event.data) {
+      } else if ((IS_WEB || RNBridge) && event && event.data) {
         // If it's web
         const { type, data, frameId } = event.data;
 
